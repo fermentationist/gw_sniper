@@ -157,16 +157,28 @@ export function createSearchApi(transport: Transport): SearchApi {
       body,
       options: req,
     });
-    const itemsRaw = Array.isArray(raw["searchResults"])
-      ? (raw["searchResults"] as unknown[])
-      : Array.isArray(raw["items"])
-        ? (raw["items"] as unknown[])
-        : [];
+    // The site's current shape wraps items in `searchResults: { items, itemCount }`.
+    // Older/alternate shapes surface a top-level array — accept both.
+    const searchResults = raw["searchResults"];
+    const nestedContainer =
+      searchResults && typeof searchResults === "object" && !Array.isArray(searchResults)
+        ? (searchResults as Record<string, unknown>)
+        : undefined;
+    const itemsRaw: unknown[] = Array.isArray(searchResults)
+      ? (searchResults as unknown[])
+      : Array.isArray(nestedContainer?.["items"])
+        ? (nestedContainer["items"] as unknown[])
+        : Array.isArray(raw["items"])
+          ? (raw["items"] as unknown[])
+          : [];
     const items = itemsRaw
       .filter((i): i is Record<string, unknown> => typeof i === "object" && i !== null)
       .map(normalizeListing);
     const resultCount =
-      pickNumber(raw, "resultCount", "result_count", "totalItems", "hitCount") ??
+      (nestedContainer
+        ? pickNumber(nestedContainer, "itemCount", "totalItems", "hitCount")
+        : undefined) ??
+      pickNumber(raw, "resultCount", "result_count", "totalItems", "hitCount", "maxTotalRecords") ??
       items.length;
     const page = Number(body.page);
     const pageSize = Number(body.pageSize);

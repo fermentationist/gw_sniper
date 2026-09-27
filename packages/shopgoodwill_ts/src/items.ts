@@ -46,25 +46,34 @@ export function createItemsApi(transport: Transport): ItemsApi {
       return detail;
     },
     async bidHistory(itemId, req) {
+      // The site no longer exposes a standalone bid-history endpoint — the
+      // history is embedded in the item detail response under
+      // `bidHistory.bidSummary`. Fetch the detail and unpack from there.
       const raw = await transport.request<Record<string, unknown>>({
         method: "GET",
-        path: `/ItemDetail/ItemBidHistory/${itemId}`,
+        path: `/ItemDetail/GetItemDetailModelByItemId/${itemId}`,
         options: req,
       });
-      const rows: unknown[] = Array.isArray(raw["bidHistory"])
-        ? (raw["bidHistory"] as unknown[])
-        : Array.isArray(raw["data"])
-          ? (raw["data"] as unknown[])
-          : Array.isArray(raw)
-            ? (raw as unknown[])
-            : [];
+      const container = raw["bidHistory"];
+      const rows: unknown[] =
+        container && typeof container === "object" && !Array.isArray(container)
+          ? Array.isArray((container as Record<string, unknown>)["bidSummary"])
+            ? ((container as Record<string, unknown>)["bidSummary"] as unknown[])
+            : []
+          : Array.isArray(container)
+            ? (container as unknown[])
+            : Array.isArray(raw["data"])
+              ? (raw["data"] as unknown[])
+              : [];
       return rows
         .filter((r): r is Record<string, unknown> => typeof r === "object" && r !== null)
         .map((row) => {
-          const bidder = pickString(row, "bidder", "bidderName", "userName") ?? "";
+          const bidder =
+            pickString(row, "bidderName", "bidder", "userName") ?? "";
           const amount = pickNumber(row, "amount", "bidAmount", "price") ?? 0;
           const placedRaw =
-            pickString(row, "bidDate", "placedAt", "date", "bidTime") ?? "";
+            pickString(row, "time", "bidDate", "placedAt", "date", "bidTime") ??
+            "";
           return {
             bidder,
             amount,
