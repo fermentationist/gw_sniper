@@ -1,14 +1,55 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { api, type InboxItem } from "../lib/api.js";
+  import {
+    api,
+    type InboxItem,
+    type InboxLiveEntry,
+  } from "../lib/api.js";
   import { handleUnauthorized } from "../lib/session.svelte.js";
 
   type Tab = "unread" | "read" | "deleted";
+  type SortKey = "endTime" | "currentPrice" | "discoveredAt" | "title";
+  type SortDir = "asc" | "desc";
+  const SORT_OPTIONS: { value: SortKey; label: string; defaultDir: SortDir }[] = [
+    { value: "endTime", label: "Time remaining", defaultDir: "asc" },
+    { value: "currentPrice", label: "Current price", defaultDir: "asc" },
+    { value: "discoveredAt", label: "Discovered", defaultDir: "desc" },
+    { value: "title", label: "Title", defaultDir: "asc" },
+  ];
   let tab = $state<Tab>("unread");
+  let sortKey = $state<SortKey>("discoveredAt");
+  let sortDir = $state<SortDir>("desc");
   let items = $state<InboxItem[]>([]);
+  let live = $state<Record<string, InboxLiveEntry>>({});
+  let liveLoading = $state(false);
   let loading = $state(false);
   let error = $state<string | null>(null);
   let selected = $state<Set<string>>(new Set());
+
+  const displayItems = $derived.by(() => {
+    if (sortKey !== "currentPrice") return items;
+    const priceOf = (i: InboxItem) =>
+      live[i.id]?.currentPrice ?? i.currentPrice;
+    const sorted = [...items].sort((a, b) =>
+      sortDir === "asc" ? priceOf(a) - priceOf(b) : priceOf(b) - priceOf(a),
+    );
+    return sorted;
+  });
+
+  function fmtEndsIn(iso: string): string {
+    const t = new Date(iso).getTime();
+    if (!Number.isFinite(t)) return iso;
+    const diff = t - Date.now();
+    if (diff <= 0) return "ended";
+    const s = Math.floor(diff / 1000);
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m ${s % 60}s`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ${m % 60}m`;
+    const d = Math.floor(h / 24);
+    return `${d}d ${h % 24}h`;
+  }
 
   let snipeFor = $state<InboxItem | null>(null);
   let snipeMax = $state("");
@@ -20,8 +61,15 @@
     loading = true;
     error = null;
     try {
-      items = await api.get<InboxItem[]>(`/api/inbox?status=${tab}`);
+      const qs = new URLSearchParams({
+        status: tab,
+        sort: sortKey,
+        dir: sortDir,
+      });
+      items = await api.get<InboxItem[]>(`/api/inbox?${qs}`);
       selected = new Set();
+      live = {};
+      void refreshLive();
     } catch (err) {
       if (!handleUnauthorized(err)) error = (err as Error).message;
     } finally {
@@ -29,11 +77,42 @@
     }
   }
 
+  async function refreshLive() {
+    const ids = items.map((i) => i.id);
+    if (ids.length === 0) return;
+    liveLoading = true;
+    try {
+      const data = await api.post<Record<string, InboxLiveEntry>>(
+        "/api/inbox/live",
+        { ids },
+      );
+      live = data;
+    } catch (err) {
+      if (!handleUnauthorized(err)) {
+        console.warn("live refresh failed", err);
+      }
+    } finally {
+      liveLoading = false;
+    }
+  }
+
   onMount(load);
   $effect(() => {
     void tab;
+    void sortKey;
+    void sortDir;
     void load();
   });
+
+  function pickSort(key: SortKey) {
+    if (key === sortKey) {
+      sortDir = sortDir === "asc" ? "desc" : "asc";
+    } else {
+      sortKey = key;
+      sortDir =
+        SORT_OPTIONS.find((o) => o.value === key)?.defaultDir ?? "desc";
+    }
+  }
 
   function toggle(id: string) {
     const next = new Set(selected);
@@ -106,6 +185,37 @@
     </div>
   </div>
 
+  <div class="flex flex-wrap items-center gap-1 text-xs">
+    <span class="text-slate-500 mr-1">Sort:</span>
+    {#each SORT_OPTIONS as opt}
+      <button
+        type="button"
+        class="px-2 py-1 rounded {sortKey === opt.value
+          ? 'bg-slate-800 text-slate-100'
+          : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'}"
+        onclick={() => pickSort(opt.value)}
+      >
+        {opt.label}
+        {#if sortKey === opt.value}
+          <span class="text-slate-400">{sortDir === "asc" ? "↑" : "↓"}</span>
+        {/if}
+      </button>
+    {/each}
+    <span class="ml-auto flex items-center gap-2 text-slate-500">
+      {#if liveLoading}
+        <span>refreshing…</span>
+      {/if}
+      <button
+        type="button"
+        class="rounded px-2 py-1 text-slate-400 hover:text-slate-100 hover:bg-slate-800/50 disabled:opacity-40"
+        disabled={liveLoading || items.length === 0}
+        onclick={() => refreshLive()}
+      >
+        Refresh
+      </button>
+    </span>
+  </div>
+
   {#if selected.size > 0}
     <div
       class="flex items-center gap-2 text-xs rounded bg-slate-900 border border-slate-800 px-3 py-2"
@@ -147,7 +257,7 @@
 
   {#if loading}
     <div class="text-slate-400 text-sm">Loading…</div>
-  {:else if items.length === 0}
+  {:else if displayItems.length === 0}
     <div
       class="rounded border border-dashed border-slate-800 p-8 text-center text-slate-500 text-sm"
     >
@@ -155,7 +265,10 @@
     </div>
   {:else}
     <ul class="divide-y divide-slate-800 rounded border border-slate-800 bg-slate-900/40">
-      {#each items as item (item.id)}
+      {#each displayItems as item (item.id)}
+        {@const l = live[item.id]}
+        {@const price = l?.currentPrice ?? item.currentPrice}
+        {@const endsAt = l?.endTime ?? item.endTime}
         <li class="flex items-center gap-4 px-3 py-3">
           <input
             type="checkbox"
@@ -183,8 +296,17 @@
               class="block truncate text-sm text-slate-100 hover:text-emerald-300"
               >{item.title}</a
             >
-            <div class="text-xs text-slate-400 mt-0.5">
-              ${item.currentPrice.toFixed(2)} · ends {item.endTime}
+            <div class="text-xs text-slate-400 mt-0.5 flex flex-wrap gap-x-2">
+              <span class={l?.currentPrice !== undefined ? "text-slate-200" : ""}
+                >${price.toFixed(2)}</span
+              >
+              {#if l?.bidCount !== undefined}
+                <span>· {l.bidCount} bid{l.bidCount === 1 ? "" : "s"}</span>
+              {/if}
+              <span>· ends in {fmtEndsIn(endsAt)}</span>
+              {#if l?.error}
+                <span class="text-rose-400" title={l.error}>· live: err</span>
+              {/if}
             </div>
           </div>
           <button

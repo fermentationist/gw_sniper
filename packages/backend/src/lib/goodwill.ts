@@ -10,6 +10,17 @@ import { decryptSecret } from "./crypto.js";
 
 let cached: ShopGoodwillClient<"authenticated"> | null = null;
 let cachedForUsername: string | null = null;
+let cachedPublic: ShopGoodwillClient | null = null;
+
+/** Anonymous client for read-only endpoints (item detail, search, shipping). */
+export function getPublicGoodwillClient(): ShopGoodwillClient {
+  if (!cachedPublic) {
+    cachedPublic = shopGoodwill({
+      throttle: { concurrency: 4, minIntervalMs: 100 },
+    });
+  }
+  return cachedPublic;
+}
 
 export class GoodwillNotConfiguredError extends Error {
   constructor() {

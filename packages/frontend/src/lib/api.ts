@@ -86,6 +86,13 @@ export interface InboxItem {
   discoveredBySearchId: string | null;
 }
 
+export interface InboxLiveEntry {
+  currentPrice?: number;
+  bidCount?: number;
+  endTime?: string;
+  error?: string;
+}
+
 export interface SniperJob {
   id: string;
   title: string;
