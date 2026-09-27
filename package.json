@@ -1,0 +1,25 @@
+{
+  "name": "gw-sniper",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Self-hosted ShopGoodwill auction tracker + sniper.",
+  "packageManager": "pnpm@10.5.0",
+  "scripts": {
+    "dev:backend": "pnpm --filter @gw-sniper/backend dev",
+    "dev:frontend": "pnpm --filter @gw-sniper/frontend dev",
+    "build:client": "pnpm --filter shopgoodwill-client build",
+    "build:backend": "pnpm --filter @gw-sniper/backend build",
+    "build:frontend": "pnpm --filter @gw-sniper/frontend build",
+    "build": "pnpm build:client && pnpm build:backend && pnpm build:frontend",
+    "db:generate": "pnpm --filter @gw-sniper/backend db:generate",
+    "db:migrate": "pnpm --filter @gw-sniper/backend db:migrate",
+    "port:kill": "f() { lsof -t -i:\"$1\" | xargs kill -9; }; f",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild"
+    ]
+  }
+}
