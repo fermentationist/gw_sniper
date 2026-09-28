@@ -7,6 +7,8 @@ export type { CredentialCipher } from "./cipher.js";
 export { decodeJwt } from "./jwt.js";
 export type { DecodedJwt } from "./jwt.js";
 
+export { parseSiteDate } from "./dates.js";
+
 export { jsonNoteCodec, stringNoteCodec } from "./notes.js";
 export type { NoteCodec } from "./notes.js";
 
@@ -37,6 +39,7 @@ export type {
   ItemDetail,
   Listing,
   Logger,
+  RefreshTokenInfo,
   RequestOptions,
   RetryOptions,
   SearchOptions,

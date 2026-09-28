@@ -12,13 +12,23 @@ import {
 } from "../lib/sniperEngine.js";
 import { getGoodwillClient } from "../lib/goodwill.js";
 
-const createSchema = z.object({
-  itemId: z.string().min(1),
-  title: z.string().min(1).optional(),
-  maxBid: z.number().positive(),
-  snipingBufferSeconds: z.number().int().min(5).max(600).optional(),
-  endTime: z.string().min(1).optional(),
-});
+const createSchema = z
+  .object({
+    itemId: z.string().min(1),
+    title: z.string().min(1).optional(),
+    mode: z.enum(["immediate", "scheduled"]).default("scheduled"),
+    // For scheduled snipes.
+    maxBid: z.number().positive().optional(),
+    snipingBufferSeconds: z.number().int().min(5).max(600).optional(),
+    endTime: z.string().min(1).optional(),
+    // For immediate bids.
+    amount: z.number().positive().optional(),
+  })
+  .refine(
+    (v) =>
+      v.mode === "immediate" ? v.amount !== undefined : v.maxBid !== undefined,
+    { message: "amount is required for immediate; maxBid for scheduled" },
+  );
 
 const updateSchema = z.object({
   maxBid: z.number().positive().optional(),
@@ -41,11 +51,12 @@ sniperRoutes.get("/timers", (c) => c.json(activeSniperTimers()));
 sniperRoutes.post("/", zValidator("json", createSchema), async (c) => {
   const input = c.req.valid("json");
 
-  // If caller didn't supply title/endTime, fetch them from the site.
+  // If caller didn't supply title/endTime, fetch them from the site. For
+  // immediate bids we also want the current price for the audit trail.
   let title = input.title;
   let endTime = input.endTime;
   let lastCheckedPrice: number | null = null;
-  if (!title || !endTime) {
+  if (!title || !endTime || input.mode === "immediate") {
     try {
       const client = await getGoodwillClient();
       const detail = await client.items.get(Number(input.itemId));
@@ -67,12 +78,70 @@ sniperRoutes.post("/", zValidator("json", createSchema), async (c) => {
     return c.json({ error: "missing_item_metadata" }, 400);
   }
 
+  if (input.mode === "immediate") {
+    const amount = input.amount!;
+    let jobStatus: "executed" | "outbid" | "failed" = "failed";
+    let lastResultMessage: string = "";
+    let finalPrice = lastCheckedPrice;
+    try {
+      const client = await getGoodwillClient();
+      const result = await client.bids.place({
+        itemId: Number(input.itemId),
+        amount,
+      });
+      if (result.ok) {
+        jobStatus = "executed";
+        finalPrice = result.currentPrice ?? finalPrice;
+        lastResultMessage = result.highBidder
+          ? `Bid placed. High bidder at $${(result.currentPrice ?? amount).toFixed(2)}`
+          : `Bid placed but not high bidder (proxy exceeded)`;
+      } else {
+        jobStatus = result.reason === "outbid" ? "outbid" : "failed";
+        lastResultMessage = `${result.reason}: ${result.message}`;
+      }
+    } catch (err) {
+      lastResultMessage = `Fire error: ${err instanceof Error ? err.message : String(err)}`;
+    }
+
+    await db
+      .insert(sniperJobs)
+      .values({
+        id: input.itemId,
+        title,
+        maxBid: amount,
+        snipingBufferSeconds: 0,
+        endTime,
+        jobStatus,
+        lastCheckedPrice: finalPrice,
+        lastResultMessage,
+      })
+      .onConflictDoUpdate({
+        target: sniperJobs.id,
+        set: {
+          title,
+          maxBid: amount,
+          snipingBufferSeconds: 0,
+          endTime,
+          jobStatus,
+          lastCheckedPrice: finalPrice,
+          lastResultMessage,
+          updatedAt: new Date().toISOString(),
+        },
+      });
+    const [row] = await db
+      .select()
+      .from(sniperJobs)
+      .where(eq(sniperJobs.id, input.itemId));
+    return c.json(row, jobStatus === "executed" ? 201 : 200);
+  }
+
+  // mode: "scheduled"
   await db
     .insert(sniperJobs)
     .values({
       id: input.itemId,
       title,
-      maxBid: input.maxBid,
+      maxBid: input.maxBid!,
       snipingBufferSeconds: input.snipingBufferSeconds ?? 30,
       endTime,
       jobStatus: "scheduled",
@@ -82,7 +151,7 @@ sniperRoutes.post("/", zValidator("json", createSchema), async (c) => {
       target: sniperJobs.id,
       set: {
         title,
-        maxBid: input.maxBid,
+        maxBid: input.maxBid!,
         snipingBufferSeconds: input.snipingBufferSeconds ?? 30,
         endTime,
         jobStatus: "scheduled",

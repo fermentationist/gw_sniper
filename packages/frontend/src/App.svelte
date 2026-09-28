@@ -8,7 +8,7 @@
   } from "./lib/session.svelte.js";
   import Login from "./routes/Login.svelte";
   import Inbox from "./routes/Inbox.svelte";
-  import Snipers from "./routes/Snipers.svelte";
+  import Bids from "./routes/Bids.svelte";
   import Searches from "./routes/Searches.svelte";
   import Config from "./routes/Config.svelte";
 
@@ -25,7 +25,7 @@
 
   const tabs: { id: Route; label: string }[] = [
     { id: "inbox", label: "Inbox" },
-    { id: "snipers", label: "Snipers" },
+    { id: "bids", label: "Bids" },
     { id: "searches", label: "Searches" },
     { id: "config", label: "Config" },
   ];
@@ -72,8 +72,8 @@
     <main class="flex-1 p-6 max-w-6xl w-full mx-auto">
       {#if route === "inbox"}
         <Inbox />
-      {:else if route === "snipers"}
-        <Snipers />
+      {:else if route === "bids"}
+        <Bids />
       {:else if route === "searches"}
         <Searches />
       {:else if route === "config"}

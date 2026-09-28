@@ -1,3 +1,4 @@
+import { parseSiteDate } from "./dates.js";
 import type { Transport } from "./http.js";
 import { normalizeListing } from "./search.js";
 import type { BidHistoryEntry, ItemDetail, RequestOptions } from "./types.js";
@@ -77,7 +78,7 @@ export function createItemsApi(transport: Transport): ItemsApi {
           return {
             bidder,
             amount,
-            placedAt: placedRaw ? new Date(placedRaw) : new Date(NaN),
+            placedAt: placedRaw ? parseSiteDate(placedRaw) : new Date(NaN),
             raw: row,
           } satisfies BidHistoryEntry;
         });

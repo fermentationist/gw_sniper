@@ -1,5 +1,6 @@
 import { createBidsApi, type BidsApi } from "./bids.js";
 import { createCipher, type CredentialCipher } from "./cipher.js";
+import { parseSiteDate } from "./dates.js";
 import { AuthenticationError, ShopGoodwillError } from "./errors.js";
 import { DEFAULT_BASE_URL, DEFAULT_USER_AGENT, Transport } from "./http.js";
 import { createItemsApi, type ItemsApi } from "./items.js";
@@ -241,11 +242,7 @@ function parseRefresh(raw: unknown): RefreshTokenInfo | undefined {
   const createdByIp =
     typeof r["createdByIp"] === "string" ? r["createdByIp"] : undefined;
   if (!token || !expiresRaw || !createdByIp) return undefined;
-  // Server emits naive-ISO strings (no Z). Interpret as UTC.
-  const withZone = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(expiresRaw)
-    ? expiresRaw
-    : `${expiresRaw}Z`;
-  const expiresAt = new Date(withZone);
+  const expiresAt = parseSiteDate(expiresRaw);
   if (Number.isNaN(expiresAt.getTime())) return undefined;
   return { token, expiresAt, createdByIp };
 }

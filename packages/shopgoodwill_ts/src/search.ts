@@ -1,3 +1,4 @@
+import { parseSiteDate } from "./dates.js";
 import type { Transport } from "./http.js";
 import type {
   Listing,
@@ -85,13 +86,7 @@ export function buildSearchBody(options: SearchOptions = {}): SearchRequestBody 
 }
 
 function parseEndsAt(raw: string): Date {
-  // Site emits ISO-like strings without a Z suffix. Interpret as UTC.
-  const trimmed = raw.trim();
-  if (!trimmed) return new Date(NaN);
-  const withZone = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(trimmed)
-    ? trimmed
-    : `${trimmed}Z`;
-  return new Date(withZone);
+  return parseSiteDate(raw);
 }
 
 function pickString(obj: Record<string, unknown>, ...keys: string[]): string | undefined {

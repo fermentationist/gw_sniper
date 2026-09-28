@@ -3,6 +3,8 @@
   import { api, type SniperJob } from "../lib/api.js";
   import { handleUnauthorized } from "../lib/session.svelte.js";
 
+  type Mode = "immediate" | "scheduled";
+
   let rows = $state<SniperJob[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
@@ -10,7 +12,12 @@
   let showCreate = $state(false);
   let submitting = $state(false);
   let formError = $state<string | null>(null);
-  let form = $state({ itemId: "", maxBid: "", snipingBufferSeconds: "30" });
+  let form = $state({
+    itemId: "",
+    amount: "",
+    snipingBufferSeconds: "30",
+    mode: "scheduled" as Mode,
+  });
 
   let editing = $state<SniperJob | null>(null);
   let editMax = $state("");
@@ -38,13 +45,24 @@
     submitting = true;
     formError = null;
     try {
-      await api.post("/api/snipers", {
+      const payload: Record<string, unknown> = {
         itemId: form.itemId,
-        maxBid: Number(form.maxBid),
-        snipingBufferSeconds: Number(form.snipingBufferSeconds),
-      });
+        mode: form.mode,
+      };
+      if (form.mode === "scheduled") {
+        payload.maxBid = Number(form.amount);
+        payload.snipingBufferSeconds = Number(form.snipingBufferSeconds);
+      } else {
+        payload.amount = Number(form.amount);
+      }
+      await api.post("/api/snipers", payload);
       showCreate = false;
-      form = { itemId: "", maxBid: "", snipingBufferSeconds: "30" };
+      form = {
+        itemId: "",
+        amount: "",
+        snipingBufferSeconds: "30",
+        mode: "scheduled",
+      };
       await load();
     } catch (err) {
       if (!handleUnauthorized(err)) formError = (err as Error).message;
@@ -75,7 +93,7 @@
   }
 
   async function remove(row: SniperJob) {
-    if (!confirm(`Cancel snipe for "${row.title}"?`)) return;
+    if (!confirm(`Remove bid entry for "${row.title}"?`)) return;
     try {
       await api.delete(`/api/snipers/${row.id}`);
       await load();
@@ -102,7 +120,7 @@
 
 <div class="space-y-4">
   <div class="flex items-center justify-between">
-    <h2 class="text-xl font-semibold tracking-tight">Snipers</h2>
+    <h2 class="text-xl font-semibold tracking-tight">Bids</h2>
     <button
       class="rounded bg-emerald-500 px-3 py-1.5 text-sm font-medium text-slate-950 hover:bg-emerald-400"
       onclick={() => (showCreate = true)}
@@ -121,7 +139,7 @@
     <div class="text-slate-400 text-sm">Loading…</div>
   {:else if rows.length === 0}
     <div class="rounded border border-dashed border-slate-800 p-8 text-center text-slate-500 text-sm">
-      No scheduled snipes. Add one from the inbox or by item ID.
+      No bids yet. Bid immediately or schedule a snipe from the inbox or by item ID.
     </div>
   {:else}
     <ul class="divide-y divide-slate-800 rounded border border-slate-800 bg-slate-900/40">
@@ -149,8 +167,10 @@
               <div class="text-xs text-slate-500 mt-0.5 truncate">{row.lastResultMessage}</div>
             {/if}
           </div>
-          <button class="text-xs text-slate-300 hover:text-slate-100" onclick={() => openEdit(row)}>Edit</button>
-          <button class="text-xs text-rose-300 hover:text-rose-200" onclick={() => remove(row)}>Cancel</button>
+          {#if row.jobStatus === "scheduled" || row.jobStatus === "outbid"}
+            <button class="text-xs text-slate-300 hover:text-slate-100" onclick={() => openEdit(row)}>Edit</button>
+          {/if}
+          <button class="text-xs text-rose-300 hover:text-rose-200" onclick={() => remove(row)}>Remove</button>
         </li>
       {/each}
     </ul>
@@ -160,19 +180,36 @@
 {#if showCreate}
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
     <form onsubmit={createJob} class="w-full max-w-md space-y-4 rounded-lg border border-slate-800 bg-slate-900 p-5">
-      <h3 class="text-sm font-semibold">Add snipe by item ID</h3>
+      <h3 class="text-sm font-semibold">Add bid by item ID</h3>
+      <div class="flex gap-1 text-xs rounded bg-slate-950 border border-slate-800 p-1">
+        {#each [{ id: "scheduled", label: "Schedule snipe" }, { id: "immediate", label: "Bid immediately" }] as opt}
+          <button
+            type="button"
+            class="flex-1 px-2 py-1 rounded {form.mode === opt.id
+              ? 'bg-slate-800 text-slate-100'
+              : 'text-slate-400 hover:text-slate-100'}"
+            onclick={() => (form.mode = opt.id as Mode)}
+          >
+            {opt.label}
+          </button>
+        {/each}
+      </div>
       <label class="block text-sm">
         <span class="text-xs font-medium text-slate-300">ShopGoodwill item ID</span>
         <input class="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm" bind:value={form.itemId} required />
       </label>
       <label class="block text-sm">
-        <span class="text-xs font-medium text-slate-300">Max bid ($)</span>
-        <input class="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm" type="number" step="0.01" bind:value={form.maxBid} required />
+        <span class="text-xs font-medium text-slate-300">
+          {form.mode === "immediate" ? "Bid amount ($)" : "Max bid ($)"}
+        </span>
+        <input class="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm" type="number" step="0.01" bind:value={form.amount} required />
       </label>
-      <label class="block text-sm">
-        <span class="text-xs font-medium text-slate-300">Buffer before end (seconds)</span>
-        <input class="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm" type="number" min="5" max="600" bind:value={form.snipingBufferSeconds} required />
-      </label>
+      {#if form.mode === "scheduled"}
+        <label class="block text-sm">
+          <span class="text-xs font-medium text-slate-300">Buffer before end (seconds)</span>
+          <input class="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm" type="number" min="5" max="600" bind:value={form.snipingBufferSeconds} required />
+        </label>
+      {/if}
       {#if formError}
         <div class="rounded bg-rose-950/60 border border-rose-800 px-3 py-2 text-xs text-rose-200">
           {formError}
@@ -181,7 +218,11 @@
       <div class="flex justify-end gap-2">
         <button type="button" class="rounded px-3 py-1.5 text-sm text-slate-300 hover:text-slate-100" onclick={() => (showCreate = false)}>Cancel</button>
         <button type="submit" disabled={submitting} class="rounded bg-emerald-500 px-3 py-1.5 text-sm font-medium text-slate-950 hover:bg-emerald-400 disabled:opacity-50">
-          {submitting ? "Saving…" : "Schedule"}
+          {submitting
+            ? "Placing…"
+            : form.mode === "immediate"
+              ? "Bid now"
+              : "Schedule"}
         </button>
       </div>
     </form>

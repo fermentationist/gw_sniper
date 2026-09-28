@@ -1,5 +1,6 @@
 import cron, { type ScheduledTask } from "node-cron";
 import { and, eq, inArray } from "drizzle-orm";
+import { parseSiteDate } from "shopgoodwill-client";
 import { db } from "../db/index.js";
 import { sniperJobs, type SniperJobRow } from "../db/schema.js";
 import { getGoodwillClient } from "./goodwill.js";
@@ -29,9 +30,7 @@ let outbidPoller: ScheduledTask | null = null;
 let microSweep: ScheduledTask | null = null;
 
 function endTimeMs(row: SniperJobRow): number {
-  const raw = row.endTime;
-  const withZone = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(raw) ? raw : `${raw}Z`;
-  return new Date(withZone).getTime();
+  return parseSiteDate(row.endTime).getTime();
 }
 
 function nowMs(): number {

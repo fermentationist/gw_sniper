@@ -51,8 +51,10 @@
     return `${d}d ${h % 24}h`;
   }
 
+  type BidMode = "immediate" | "scheduled";
   let snipeFor = $state<InboxItem | null>(null);
-  let snipeMax = $state("");
+  let snipeMode = $state<BidMode>("scheduled");
+  let snipeAmount = $state("");
   let snipeBuffer = $state("30");
   let snipeSubmitting = $state(false);
   let snipeError = $state<string | null>(null);
@@ -136,8 +138,10 @@
 
   function openSnipe(item: InboxItem) {
     snipeFor = item;
-    snipeMax = String(item.currentPrice + 1);
+    const livePrice = live[item.id]?.currentPrice ?? item.currentPrice;
+    snipeAmount = String(livePrice + 1);
     snipeBuffer = "30";
+    snipeMode = "scheduled";
     snipeError = null;
   }
 
@@ -147,13 +151,19 @@
     snipeSubmitting = true;
     snipeError = null;
     try {
-      await api.post("/api/snipers", {
+      const payload: Record<string, unknown> = {
         itemId: snipeFor.id,
         title: snipeFor.title,
         endTime: snipeFor.endTime,
-        maxBid: Number(snipeMax),
-        snipingBufferSeconds: Number(snipeBuffer),
-      });
+        mode: snipeMode,
+      };
+      if (snipeMode === "scheduled") {
+        payload.maxBid = Number(snipeAmount);
+        payload.snipingBufferSeconds = Number(snipeBuffer);
+      } else {
+        payload.amount = Number(snipeAmount);
+      }
+      await api.post("/api/snipers", payload);
       snipeFor = null;
     } catch (err) {
       if (!handleUnauthorized(err)) snipeError = (err as Error).message;
@@ -313,7 +323,7 @@
             class="text-xs rounded bg-emerald-500/90 hover:bg-emerald-400 px-2 py-1 text-slate-950 font-medium"
             onclick={() => openSnipe(item)}
           >
-            Snipe
+            Bid
           </button>
         </li>
       {/each}
@@ -329,31 +339,48 @@
       onsubmit={submitSnipe}
       class="w-full max-w-md space-y-4 rounded-lg border border-slate-800 bg-slate-900 p-5"
     >
-      <h3 class="text-sm font-semibold">Schedule snipe</h3>
+      <h3 class="text-sm font-semibold">Place bid</h3>
       <p class="text-xs text-slate-400 truncate">{snipeFor.title}</p>
-      <label class="block text-sm">
-        <span class="text-xs font-medium text-slate-300">Max bid ($)</span>
-        <input
-          class="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
-          type="number"
-          step="0.01"
-          bind:value={snipeMax}
-          required
-        />
-      </label>
+      <div class="flex gap-1 text-xs rounded bg-slate-950 border border-slate-800 p-1">
+        {#each [{ id: "scheduled", label: "Schedule snipe" }, { id: "immediate", label: "Bid immediately" }] as opt}
+          <button
+            type="button"
+            class="flex-1 px-2 py-1 rounded {snipeMode === opt.id
+              ? 'bg-slate-800 text-slate-100'
+              : 'text-slate-400 hover:text-slate-100'}"
+            onclick={() => (snipeMode = opt.id as BidMode)}
+          >
+            {opt.label}
+          </button>
+        {/each}
+      </div>
       <label class="block text-sm">
         <span class="text-xs font-medium text-slate-300">
-          Buffer before end (seconds)
+          {snipeMode === "immediate" ? "Bid amount ($)" : "Max bid ($)"}
         </span>
         <input
           class="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
           type="number"
-          min="5"
-          max="600"
-          bind:value={snipeBuffer}
+          step="0.01"
+          bind:value={snipeAmount}
           required
         />
       </label>
+      {#if snipeMode === "scheduled"}
+        <label class="block text-sm">
+          <span class="text-xs font-medium text-slate-300">
+            Buffer before end (seconds)
+          </span>
+          <input
+            class="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+            type="number"
+            min="5"
+            max="600"
+            bind:value={snipeBuffer}
+            required
+          />
+        </label>
+      {/if}
       {#if snipeError}
         <div
           class="rounded bg-rose-950/60 border border-rose-800 px-3 py-2 text-xs text-rose-200"
@@ -374,7 +401,11 @@
           disabled={snipeSubmitting}
           class="rounded bg-emerald-500 px-3 py-1.5 text-sm font-medium text-slate-950 hover:bg-emerald-400 disabled:opacity-50"
         >
-          {snipeSubmitting ? "Saving…" : "Schedule"}
+          {snipeSubmitting
+            ? "Placing…"
+            : snipeMode === "immediate"
+              ? "Bid now"
+              : "Schedule"}
         </button>
       </div>
     </form>
