@@ -1,33 +1,20 @@
 /**
- * AES-128-CBC obfuscation for the login endpoint. Static key/IV lifted from
- * the site's front-end bundle — this is obfuscation, not security.
+ * AES-256-CBC obfuscation for the login/refresh endpoints. Key and IV are
+ * static parameters hardcoded in the site's main.js bundle, and are used as
+ * UTF-8 byte strings (not hex-decoded): the key string happens to look like
+ * hex but is treated as 32 ASCII bytes → AES-256 key size; the IV is 16 ASCII
+ * '0' characters (0x30 each), not 16 zero bytes.
  *
- * The output binary is base64-encoded and then URL-encoded before being
- * placed into the JSON string payload (yes, on top of JSON escaping; the
- * front-end really does encodeURIComponent the base64 value).
+ * The ciphertext is base64-encoded then URL-encoded before being placed into
+ * the JSON string payload (yes, on top of JSON escaping).
  */
 
 export interface CredentialCipher {
   encrypt(plaintext: string): Promise<string>;
 }
 
-const DEFAULT_KEY_HEX = "6696D2E6F042FEC4D6E3F32AD541143B";
-const DEFAULT_IV_HEX = "00000000000000000000000000000000";
-
-function hexToBytes(hex: string): Uint8Array {
-  if (hex.length % 2 !== 0) {
-    throw new Error(`Hex string must have even length, got ${hex.length}`);
-  }
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < bytes.length; i++) {
-    const byte = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-    if (Number.isNaN(byte)) {
-      throw new Error(`Invalid hex byte at position ${i * 2}`);
-    }
-    bytes[i] = byte;
-  }
-  return bytes;
-}
+const DEFAULT_KEY_UTF8 = "6696D2E6F042FEC4D6E3F32AD541143B";
+const DEFAULT_IV_UTF8 = "0000000000000000";
 
 function bytesToBase64(bytes: Uint8Array): string {
   if (typeof Buffer !== "undefined") {
@@ -43,11 +30,14 @@ export function createCipher(params: {
   iv?: string;
   subtle?: SubtleCrypto;
 } = {}): CredentialCipher {
-  const keyBytes = hexToBytes(params.key ?? DEFAULT_KEY_HEX);
-  const ivBytes = hexToBytes(params.iv ?? DEFAULT_IV_HEX);
+  const encoder = new TextEncoder();
+  const keyBytes = encoder.encode(params.key ?? DEFAULT_KEY_UTF8);
+  const ivBytes = encoder.encode(params.iv ?? DEFAULT_IV_UTF8);
 
-  if (keyBytes.length !== 16) {
-    throw new Error(`AES-128 requires a 16-byte key, got ${keyBytes.length}`);
+  if (keyBytes.length !== 16 && keyBytes.length !== 24 && keyBytes.length !== 32) {
+    throw new Error(
+      `AES key must be 16, 24, or 32 bytes; got ${keyBytes.length}`,
+    );
   }
   if (ivBytes.length !== 16) {
     throw new Error(`AES-CBC requires a 16-byte IV, got ${ivBytes.length}`);
@@ -76,7 +66,7 @@ export function createCipher(params: {
   return {
     async encrypt(plaintext: string): Promise<string> {
       const key = await getKey();
-      const encoded = new TextEncoder().encode(plaintext);
+      const encoded = encoder.encode(plaintext);
       const cipherBuffer = await subtle.encrypt(
         { name: "AES-CBC", iv: ivBytes as BufferSource },
         key,

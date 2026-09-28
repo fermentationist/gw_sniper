@@ -11,6 +11,7 @@ import type {
   AuthState,
   ClientOptions,
   Logger,
+  RefreshTokenInfo,
   RequestOptions,
   RetryOptions,
   ThrottleOptions,
@@ -20,10 +21,11 @@ import type {
 import { createWatchlistApi, type WatchlistApi } from "./watchlist.js";
 
 /**
- * @default a known-good front-end build hash. Overridable via
- * `ClientOptions.appVersion` when it rotates.
+ * @default a known-good front-end build hash. Matches the `main.<hash>.js`
+ * bundle filename on shopgoodwill.com — rotates when the site redeploys.
+ * Overridable via `ClientOptions.appVersion`.
  */
-export const DEFAULT_APP_VERSION = "00099a1be3bb023ff17d";
+export const DEFAULT_APP_VERSION = "918356f8354624fa";
 
 interface Internal {
   cipher: CredentialCipher;
@@ -131,7 +133,7 @@ async function primeAuth(
 ): Promise<void> {
   if (!auth) return;
   if (auth.type === "token") {
-    setToken(state, auth.token);
+    setToken(state, auth.token, auth.refresh);
     await auth.onToken?.(state.token!);
     return;
   }
@@ -143,12 +145,17 @@ async function primeAuth(
   await ensureLogin(state);
 }
 
-function setToken(state: Internal, token: string): void {
+function setToken(
+  state: Internal,
+  token: string,
+  refresh?: RefreshTokenInfo,
+): void {
   const decoded = decodeJwt(token);
   state.token = {
     token,
     expiresAt: decoded.expiresAt,
     claims: decoded.claims,
+    ...(refresh ? { refresh } : {}),
   };
 }
 
@@ -157,51 +164,46 @@ async function ensureLogin(state: Internal): Promise<TokenInfo> {
     const exp = state.token.expiresAt?.getTime();
     if (!exp || exp - state.now() > 5_000) return state.token;
   }
-  if (state.auth?.type !== "password") {
-    throw new AuthenticationError(
-      "No valid token available and no password credentials to log in with",
-      { path: "/SignIn/Login" },
-    );
-  }
   if (state.loginInFlight) return state.loginInFlight;
 
-  const auth = state.auth;
-  state.loginInFlight = performLogin(state, auth.username, auth.password)
-    .then(async (info) => {
+  const currentRefresh =
+    state.token?.refresh ??
+    (state.auth?.type === "token" ? state.auth.refresh : undefined);
+
+  const runner = async (): Promise<TokenInfo> => {
+    if (currentRefresh && currentRefresh.expiresAt.getTime() - state.now() > 5_000) {
+      const info = await performRefresh(state, currentRefresh);
       state.token = info;
-      await auth.onToken?.(info);
+      await onTokenCallback(state, info);
       return info;
-    })
-    .finally(() => {
-      state.loginInFlight = undefined;
-    });
+    }
+    if (state.auth?.type === "password") {
+      const info = await performLogin(state, state.auth.username, state.auth.password);
+      state.token = info;
+      await state.auth.onToken?.(info);
+      return info;
+    }
+    throw new AuthenticationError(
+      "Access token expired and no valid refresh token or password is available",
+      { path: "/SignIn/Login" },
+    );
+  };
+
+  state.loginInFlight = runner().finally(() => {
+    state.loginInFlight = undefined;
+  });
   return state.loginInFlight;
 }
 
-async function performLogin(
-  state: Internal,
-  username: string,
-  password: string,
-  remember = false,
-): Promise<TokenInfo> {
-  const [encUser, encPass] = await Promise.all([
-    state.cipher.encrypt(username),
-    state.cipher.encrypt(password),
-  ]);
-  const body = {
-    browser: "firefox",
-    remember,
-    clientIpAddress: state.clientIpAddress,
-    appVersion: state.appVersion,
-    userName: encUser,
-    password: encPass,
-  };
-  const response = await state.transport.request<Record<string, unknown>>({
-    method: "POST",
-    path: "/SignIn/Login",
-    body,
-    options: { priority: "high" },
-  });
+async function onTokenCallback(state: Internal, info: TokenInfo): Promise<void> {
+  const cb = state.auth?.onToken;
+  if (cb) await cb(info);
+}
+
+function parseAuthResponse(
+  response: Record<string, unknown>,
+  path: string,
+): TokenInfo {
   const token =
     (typeof response["accessToken"] === "string" && response["accessToken"]) ||
     (typeof response["token"] === "string" && response["token"]) ||
@@ -210,13 +212,84 @@ async function performLogin(
       ((response["data"] as Record<string, unknown>)["accessToken"] as string)) ||
     undefined;
   if (!token) {
-    throw new AuthenticationError("Login response did not contain a token", {
-      path: "/SignIn/Login",
+    throw new AuthenticationError(`${path} response did not contain a token`, {
+      path,
       responseBody: response,
     });
   }
   const decoded = decodeJwt(token);
-  return { token, expiresAt: decoded.expiresAt, claims: decoded.claims };
+  const info: TokenInfo = {
+    token,
+    expiresAt: decoded.expiresAt,
+    claims: decoded.claims,
+  };
+  const refresh = parseRefresh(response["refreshToken"]);
+  if (refresh) info.refresh = refresh;
+  return info;
+}
+
+function parseRefresh(raw: unknown): RefreshTokenInfo | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const r = raw as Record<string, unknown>;
+  const token = typeof r["token"] === "string" ? r["token"] : undefined;
+  const expiresRaw =
+    typeof r["expires"] === "string"
+      ? r["expires"]
+      : typeof r["expiresAt"] === "string"
+        ? (r["expiresAt"] as string)
+        : undefined;
+  const createdByIp =
+    typeof r["createdByIp"] === "string" ? r["createdByIp"] : undefined;
+  if (!token || !expiresRaw || !createdByIp) return undefined;
+  // Server emits naive-ISO strings (no Z). Interpret as UTC.
+  const withZone = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(expiresRaw)
+    ? expiresRaw
+    : `${expiresRaw}Z`;
+  const expiresAt = new Date(withZone);
+  if (Number.isNaN(expiresAt.getTime())) return undefined;
+  return { token, expiresAt, createdByIp };
+}
+
+async function performLogin(
+  state: Internal,
+  username: string,
+  password: string,
+  remember = true,
+): Promise<TokenInfo> {
+  const [encUser, encPass] = await Promise.all([
+    state.cipher.encrypt(username),
+    state.cipher.encrypt(password),
+  ]);
+  const body = {
+    userName: encUser,
+    password: encPass,
+    remember,
+    appVersion: state.appVersion,
+    browser: state.userAgent.toLowerCase(),
+  };
+  const response = await state.transport.request<Record<string, unknown>>({
+    method: "POST",
+    path: "/SignIn/Login",
+    body,
+    options: { priority: "high" },
+  });
+  return parseAuthResponse(response, "/SignIn/Login");
+}
+
+async function performRefresh(
+  state: Internal,
+  refresh: RefreshTokenInfo,
+): Promise<TokenInfo> {
+  const response = await state.transport.request<Record<string, unknown>>({
+    method: "POST",
+    path: "/SignIn/RefreshToken",
+    body: {
+      refreshToken: refresh.token,
+      clientIpAddress: refresh.createdByIp,
+    },
+    options: { priority: "high" },
+  });
+  return parseAuthResponse(response, "/SignIn/RefreshToken");
 }
 
 function buildClient(state: Internal): ShopGoodwillClient<AuthState> {

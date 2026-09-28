@@ -4,9 +4,14 @@ import { sql } from "drizzle-orm";
 export const appConfig = sqliteTable("app_config", {
   id: integer("id").primaryKey().$default(() => 1),
   goodwillUsername: text("goodwill_username"),
-  encryptedGoodwillPassword: text("encrypted_goodwill_password"),
-  cachedToken: text("cached_token"),
-  tokenExpiresAt: text("token_expires_at"),
+  // Both access and refresh tokens are bearer credentials, so both are
+  // encrypted at rest with the APP_SECRET-derived key. Password is no
+  // longer stored — one-time login exchange only.
+  encryptedAccessToken: text("encrypted_access_token"),
+  accessTokenExpiresAt: text("access_token_expires_at"),
+  encryptedRefreshToken: text("encrypted_refresh_token"),
+  refreshTokenExpiresAt: text("refresh_token_expires_at"),
+  refreshTokenCreatedByIp: text("refresh_token_created_by_ip"),
   notificationEmail: text("notification_email"),
   smtpHost: text("smtp_host"),
   smtpPort: integer("smtp_port"),

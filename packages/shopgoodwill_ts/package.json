@@ -20,7 +20,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsc -p tsconfig.test.json && node --test 'dist-test/test/*.test.js'",
     "test:integration": "tsc -p tsconfig.test.json && RUN_INTEGRATION=1 node --test 'dist-test/test/integration/*.test.js'",
-    "test:watch": "tsc -p tsconfig.test.json --watch & node --test --watch 'dist-test/test/*.test.js'"
+    "test:watch": "tsc -p tsconfig.test.json --watch & node --test --watch 'dist-test/test/*.test.js'",
+    "probe:login": "node --env-file-if-exists=.env --env-file-if-exists=../../.env scripts/probe-login.mjs"
   },
   "keywords": ["shopgoodwill", "goodwill", "auction", "client", "api"],
   "author": "",

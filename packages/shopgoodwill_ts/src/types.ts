@@ -6,17 +6,35 @@ export type WhenAuthed<S extends AuthState, T> = S extends "authenticated"
   ? T
   : never;
 
+/**
+ * Refresh-token metadata returned alongside the access token by /SignIn/Login
+ * (and echoed by /SignIn/RefreshToken). The `createdByIp` value must be sent
+ * back verbatim on refresh — the server binds refresh tokens to it.
+ */
+export interface RefreshTokenInfo {
+  token: string;
+  expiresAt: Date;
+  createdByIp: string;
+}
+
 export interface TokenInfo {
   token: string;
   /** Parsed from the JWT `exp` claim. Not verified — decode only. */
   expiresAt: Date | undefined;
   claims: Record<string, unknown>;
+  /** Present when auth came from a login or a prior refresh. */
+  refresh?: RefreshTokenInfo;
 }
 
 export type AuthConfig =
   | {
       type: "token";
       token: string;
+      /**
+       * If provided, an expired access token will be renewed via
+       * /SignIn/RefreshToken instead of throwing.
+       */
+      refresh?: RefreshTokenInfo;
       onToken?: (token: TokenInfo) => void | Promise<void>;
     }
   | {

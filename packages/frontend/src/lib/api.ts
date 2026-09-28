@@ -52,7 +52,9 @@ export const api = {
 
 export interface AppConfig {
   goodwillUsername: string | null;
-  goodwillPasswordSet: boolean;
+  goodwillAuthenticated: boolean;
+  goodwillAccessTokenExpiresAt: string | null;
+  goodwillRefreshTokenExpiresAt: string | null;
   notificationEmail: string | null;
   smtpHost: string | null;
   smtpPort: number | null;
