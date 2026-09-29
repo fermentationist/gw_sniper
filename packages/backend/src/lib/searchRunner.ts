@@ -36,7 +36,7 @@ function toInboxRow(
     endTime: listing.endsAtRaw,
     imageUrl: listing.imageUrl ?? null,
     status: "unread",
-    discoveredAt: null,
+    discoveredAt: new Date().toISOString(),
     discoveredBySearchId,
   };
 }

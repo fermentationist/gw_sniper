@@ -25,6 +25,7 @@
   let tab = $state<Tab>("unread");
   let sortKey = $state<SortKey>("discoveredAt");
   let sortDir = $state<SortDir>("desc");
+  let showEnded = $state(false);
   let items = $state<InboxItem[]>([]);
   let live = $state<Record<string, InboxLiveEntry>>({});
   let liveLoading = $state(false);
@@ -32,15 +33,24 @@
   let error = $state<string | null>(null);
   let selected = $state<Set<string>>(new Set());
   let quotes = $state<Record<string, QuoteState>>({});
+  let nowTick = $state(Date.now());
 
   const displayItems = $derived.by(() => {
-    if (sortKey !== "currentPrice") return items;
+    const endedThreshold = nowTick;
+    const filtered = showEnded
+      ? items
+      : items.filter((i) => {
+          const raw = live[i.id]?.endTime ?? i.endTime;
+          const t = new Date(raw).getTime();
+          // Keep items whose end time is unparseable or still in the future.
+          return !Number.isFinite(t) || t > endedThreshold;
+        });
+    if (sortKey !== "currentPrice") return filtered;
     const priceOf = (i: InboxItem) =>
       live[i.id]?.currentPrice ?? i.currentPrice;
-    const sorted = [...items].sort((a, b) =>
+    return [...filtered].sort((a, b) =>
       sortDir === "asc" ? priceOf(a) - priceOf(b) : priceOf(b) - priceOf(a),
     );
-    return sorted;
   });
 
   function fmtEndsIn(iso: string): string {
@@ -126,7 +136,11 @@
     }
   }
 
-  onMount(load);
+  onMount(() => {
+    void load();
+    const t = setInterval(() => (nowTick = Date.now()), 30_000);
+    return () => clearInterval(t);
+  });
   $effect(() => {
     void tab;
     void sortKey;
@@ -253,6 +267,14 @@
       </button>
     {/each}
     <span class="ml-auto flex items-center gap-2 text-slate-500">
+      <label class="flex items-center gap-1 cursor-pointer text-slate-400 hover:text-slate-100">
+        <input
+          type="checkbox"
+          bind:checked={showEnded}
+          class="rounded border-slate-700 bg-slate-950"
+        />
+        Show ended
+      </label>
       {#if liveLoading}
         <span>refreshing…</span>
       {/if}
