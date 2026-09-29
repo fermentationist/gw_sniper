@@ -124,7 +124,7 @@ export async function runSavedSearch(
 
     if (inserted.length > 0 && saved.emailAlertsEnabled) {
       const result = await sendMail({
-        subject: `[GW-Sniper] ${inserted.length} new item(s) for "${saved.name}"`,
+        subject: `[gw_sniper] ${inserted.length} new item(s) for "${saved.name}"`,
         html: digestHtml(inserted, saved.name),
         text: digestText(inserted, saved.name),
         requiresGlobalFlag: true,

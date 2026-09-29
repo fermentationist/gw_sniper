@@ -57,10 +57,13 @@ async function updateJob(
   return rows[0];
 }
 
-async function sendOutbidEmail(row: SniperJobRow, price: number): Promise<void> {
+async function sendOutbidEmail(
+  row: SniperJobRow,
+  price: number,
+): Promise<void> {
   const url = `https://shopgoodwill.com/item/${row.id}`;
   await sendMail({
-    subject: `[GW-Sniper] Outbid on "${row.title}"`,
+    subject: `[gw_sniper] Outbid on "${row.title}"`,
     text:
       `Your snipe on "${row.title}" has been cancelled.\n` +
       `Current price ($${price.toFixed(2)}) now exceeds your max bid ($${row.maxBid.toFixed(2)}).\n\n${url}`,
@@ -269,5 +272,8 @@ export function stopSniperEngine(): void {
 }
 
 export function activeSniperTimers(): Array<{ id: string; fireAt: number }> {
-  return Array.from(timers.entries()).map(([id, t]) => ({ id, fireAt: t.fireAt }));
+  return Array.from(timers.entries()).map(([id, t]) => ({
+    id,
+    fireAt: t.fireAt,
+  }));
 }

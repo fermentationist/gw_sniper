@@ -40,12 +40,9 @@ app.onError((err, c) => {
   return c.json({ error: "internal_error", message: err.message }, 500);
 });
 
-serve(
-  { fetch: app.fetch, port: env.PORT },
-  ({ port }) => {
-    console.log(`GW-Sniper backend listening on http://localhost:${port}`);
-  },
-);
+serve({ fetch: app.fetch, port: env.PORT }, ({ port }) => {
+  console.log(`gw_sniper backend listening on http://localhost:${port}`);
+});
 
 startCronManager().catch((err) => {
   console.error("[cron] startup failed", err);

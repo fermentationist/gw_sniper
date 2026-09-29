@@ -11,7 +11,7 @@ import { env } from "../env.js";
 const KEY_LENGTH = 32;
 const IV_LENGTH = 12;
 const TAG_LENGTH = 16;
-const SCRYPT_SALT = "gw-sniper:v1";
+const SCRYPT_SALT = "gw_sniper:v1";
 
 const derivedKey = scryptSync(env.APP_SECRET, SCRYPT_SALT, KEY_LENGTH);
 
@@ -44,10 +44,16 @@ export function decryptSecret(payload: string): string {
 }
 
 // Session cookie signing — separate HMAC key derived from APP_SECRET.
-const cookieHmacKey = scryptSync(env.APP_SECRET, "gw-sniper:cookie", KEY_LENGTH);
+const cookieHmacKey = scryptSync(
+  env.APP_SECRET,
+  "gw_sniper:cookie",
+  KEY_LENGTH,
+);
 
 export function signSessionToken(payload: string): string {
-  const mac = createHmac("sha256", cookieHmacKey).update(payload).digest("base64url");
+  const mac = createHmac("sha256", cookieHmacKey)
+    .update(payload)
+    .digest("base64url");
   return `${payload}.${mac}`;
 }
 
