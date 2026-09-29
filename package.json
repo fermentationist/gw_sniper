@@ -14,7 +14,7 @@
     "db:generate": "pnpm --filter @gw_sniper/backend db:generate",
     "db:migrate": "pnpm --filter @gw_sniper/backend db:migrate",
     "port:kill": "f() { lsof -t -i:\"$1\" | xargs kill -9; }; f",
-    "prod": "pnpm build && pnpm --filter @gw_sniper/backend start",
+    "prod": "pnpm --filter @gw_sniper/backend db:migrate && pnpm --filter @gw_sniper/backend start",
     "typecheck": "pnpm -r typecheck"
   },
   "pnpm": {
