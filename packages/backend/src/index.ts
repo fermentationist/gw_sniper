@@ -11,6 +11,7 @@ import { searchRoutes } from "./routes/searches.js";
 import { sniperRoutes } from "./routes/snipers.js";
 import { startCronManager } from "./lib/cronManager.js";
 import { startSniperEngine } from "./lib/sniperEngine.js";
+import { readFile } from "fs/promises";
 
 const app = new Hono();
 
@@ -33,6 +34,47 @@ app.route("/api/searches", searchRoutes);
 app.route("/api/inbox", inboxRoutes);
 app.route("/api/items", itemRoutes);
 app.route("/api/snipers", sniperRoutes);
+// in production, serve the frontend from the backend
+if (isProd) {
+  app.get("/*", async (c) => {
+    const url = new URL(c.req.url);
+    const path = url.pathname === "/" ? "/index.html" : url.pathname;
+    const filePath = new URL(`../../frontend/dist${path}`, import.meta.url);
+    try {
+      const file = await readFile(filePath, { encoding: "utf-8" });
+      let contentType = "application/octet-stream";
+      switch (true) {
+        case path.endsWith(".html"):
+          contentType = "text/html";
+          break;
+        case path.endsWith(".js"):
+          contentType = "text/javascript";
+          break;
+        case path.endsWith(".css"):
+          contentType = "text/css";
+          break;
+        case path.endsWith(".json"):
+          contentType = "application/json";
+          break;
+        case path.endsWith(".png"):
+          contentType = "image/png";
+          break;
+        case path.endsWith(".jpg") || path.endsWith(".jpeg"):
+          contentType = "image/jpeg";
+          break;
+        case path.endsWith(".svg"):
+          contentType = "image/svg+xml";
+          break;
+      }
+      return c.body(file, 200, {
+        "Content-Type": contentType,
+      });
+    } catch (err) {
+      console.error("[frontend] failed to serve", filePath, err);
+      return c.json({ error: "not_found" }, 404);
+    }
+  });
+}
 
 app.notFound((c) => c.json({ error: "not_found" }, 404));
 app.onError((err, c) => {
