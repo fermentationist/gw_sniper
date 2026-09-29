@@ -4,8 +4,14 @@
     api,
     type InboxItem,
     type InboxLiveEntry,
+    type ShippingQuote,
   } from "../lib/api.js";
   import { handleUnauthorized } from "../lib/session.svelte.js";
+
+  type QuoteState =
+    | { status: "loading" }
+    | { status: "ok"; quote: ShippingQuote }
+    | { status: "error"; message: string };
 
   type Tab = "unread" | "read" | "deleted";
   type SortKey = "endTime" | "currentPrice" | "discoveredAt" | "title";
@@ -25,6 +31,7 @@
   let loading = $state(false);
   let error = $state<string | null>(null);
   let selected = $state<Set<string>>(new Set());
+  let quotes = $state<Record<string, QuoteState>>({});
 
   const displayItems = $derived.by(() => {
     if (sortKey !== "currentPrice") return items;
@@ -58,6 +65,27 @@
   let snipeBuffer = $state("30");
   let snipeSubmitting = $state(false);
   let snipeError = $state<string | null>(null);
+  let snipeQuote = $state<QuoteState | null>(null);
+
+  async function fetchQuote(id: string): Promise<QuoteState> {
+    try {
+      const q = await api.get<ShippingQuote>(`/api/items/${id}/shipping-quote`);
+      return { status: "ok", quote: q };
+    } catch (err) {
+      if (handleUnauthorized(err)) return { status: "error", message: "unauthorized" };
+      return { status: "error", message: (err as Error).message };
+    }
+  }
+
+  function fmtQuote(q: QuoteState | null | undefined): string {
+    if (!q) return "S&H: —";
+    if (q.status === "loading") return "S&H: …";
+    if (q.status === "error") return "S&H: err";
+    const { quote } = q;
+    if (quote.source === "no-address") return "S&H: set address in Config";
+    if (quote.source === "flat") return `S&H: $${quote.total.toFixed(2)} (flat)`;
+    return `S&H: $${quote.total.toFixed(2)} = ship $${quote.shipping.toFixed(2)} + handling $${quote.handling.toFixed(2)}`;
+  }
 
   async function load() {
     loading = true;
@@ -136,6 +164,12 @@
     }
   }
 
+  async function loadQuote(id: string) {
+    if (quotes[id] && quotes[id].status !== "error") return;
+    quotes[id] = { status: "loading" };
+    quotes[id] = await fetchQuote(id);
+  }
+
   function openSnipe(item: InboxItem) {
     snipeFor = item;
     const livePrice = live[item.id]?.currentPrice ?? item.currentPrice;
@@ -143,6 +177,13 @@
     snipeBuffer = "30";
     snipeMode = "scheduled";
     snipeError = null;
+    snipeQuote = quotes[item.id] ?? { status: "loading" };
+    if (!quotes[item.id] || quotes[item.id]?.status === "error") {
+      void fetchQuote(item.id).then((q) => {
+        snipeQuote = q;
+        quotes[item.id] = q;
+      });
+    }
   }
 
   async function submitSnipe(e: Event) {
@@ -317,6 +358,19 @@
               {#if l?.error}
                 <span class="text-rose-400" title={l.error}>· live: err</span>
               {/if}
+              <span>·
+                {#if quotes[item.id]}
+                  <span class="text-slate-300">{fmtQuote(quotes[item.id])}</span>
+                {:else}
+                  <button
+                    type="button"
+                    class="text-slate-400 hover:text-emerald-300 underline decoration-dotted"
+                    onclick={() => loadQuote(item.id)}
+                  >
+                    S&amp;H →
+                  </button>
+                {/if}
+              </span>
             </div>
           </div>
           <button
@@ -341,6 +395,16 @@
     >
       <h3 class="text-sm font-semibold">Place bid</h3>
       <p class="text-xs text-slate-400 truncate">{snipeFor.title}</p>
+      {#if snipeQuote}
+        <div class="rounded bg-slate-950 border border-slate-800 px-3 py-2 text-xs text-slate-300">
+          {fmtQuote(snipeQuote)}
+          {#if snipeQuote.status === "ok" && Number(snipeAmount) > 0}
+            <div class="text-slate-500 mt-0.5">
+              If won at ${Number(snipeAmount).toFixed(2)}: ${(Number(snipeAmount) + snipeQuote.quote.total).toFixed(2)} total
+            </div>
+          {/if}
+        </div>
+      {/if}
       <div class="flex gap-1 text-xs rounded bg-slate-950 border border-slate-800 p-1">
         {#each [{ id: "scheduled", label: "Schedule snipe" }, { id: "immediate", label: "Bid immediately" }] as opt}
           <button

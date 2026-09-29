@@ -61,6 +61,21 @@ export interface AppConfig {
   smtpUser: string | null;
   smtpPassSet: boolean;
   globalEmailAlertsEnabled: boolean;
+  shippingName: string | null;
+  shippingStreet: string | null;
+  shippingCity: string | null;
+  shippingState: string | null;
+  shippingZip: string | null;
+  shippingCountry: string | null;
+}
+
+export interface ShippingQuote {
+  source: "flat" | "calc" | "no-address";
+  handling: number;
+  shipping: number;
+  total: number;
+  carrier?: string;
+  method?: string;
 }
 
 export interface SavedSearch {

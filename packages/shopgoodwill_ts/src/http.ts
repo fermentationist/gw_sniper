@@ -32,6 +32,8 @@ export interface TransportRequest {
   body?: unknown;
   query?: Record<string, string | number | undefined> | undefined;
   auth?: boolean | undefined;
+  /** @default "json" — endpoints that return HTML (e.g. CalculateShipping) opt into "text". */
+  responseType?: "json" | "text" | undefined;
   options?: RequestOptions | undefined;
 }
 
@@ -148,6 +150,9 @@ export class Transport {
         if (status >= 200 && status < 300) {
           const raw = await response.text();
           if (!raw) return undefined as T;
+          if (req.responseType === "text") {
+            return raw as unknown as T;
+          }
           try {
             return JSON.parse(raw) as T;
           } catch (cause) {

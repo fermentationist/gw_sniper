@@ -6,6 +6,7 @@ import { env, isProd } from "./env.js";
 import { authRoutes } from "./routes/auth.js";
 import { configRoutes } from "./routes/config.js";
 import { inboxRoutes } from "./routes/inbox.js";
+import { itemRoutes } from "./routes/items.js";
 import { searchRoutes } from "./routes/searches.js";
 import { sniperRoutes } from "./routes/snipers.js";
 import { startCronManager } from "./lib/cronManager.js";
@@ -30,6 +31,7 @@ app.route("/api/auth", authRoutes);
 app.route("/api/config", configRoutes);
 app.route("/api/searches", searchRoutes);
 app.route("/api/inbox", inboxRoutes);
+app.route("/api/items", itemRoutes);
 app.route("/api/snipers", sniperRoutes);
 
 app.notFound((c) => c.json({ error: "not_found" }, 404));

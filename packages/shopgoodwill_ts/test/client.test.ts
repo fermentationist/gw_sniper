@@ -210,20 +210,30 @@ test("login encrypts credentials and stores the returned token", async () => {
   assert.ok(calls.some((c) => c.url.endsWith("/SignIn/Login")));
 });
 
-test("shipping.quote posts item + zip and normalises the nested response", async () => {
-  const { fetch, calls } = makeFetch(() =>
-    jsonResponse(200, { shipping: { shipping: 8.5, handling: 2, total: 10.5 } }),
+test("shipping.calculate posts item + zip and parses the HTML response", async () => {
+  const html =
+    "<p>Estimated Shipping and Handling:</p>" +
+    "<p>Shipped From: Oregon, OH 43616</p>" +
+    "<p>Shipping Carrier: FedEx<p>Address:   20500 US</p>" +
+    "<p>Shipping: <span id='shipping-span'>$8.50 (GROUND_HOME_DELIVERY)</span></p>" +
+    "<p>Handling: $2.00</p>" +
+    "<p><b>Total Shipping and Handling: $10.50</b></p>";
+  const { fetch, calls } = makeFetch(
+    () => new Response(html, { status: 200, headers: { "content-type": "text/html" } }),
   );
   const client = shopGoodwill({ fetch, throttle: { minIntervalMs: 0, concurrency: 4 } });
-  const q = await client.shipping.quote({ itemId: 123, zipCode: "20500" });
+  const q = await client.shipping.calculate({ itemId: 123, zipCode: "20500" });
   assert.equal(q.shipping, 8.5);
   assert.equal(q.handling, 2);
   assert.equal(q.total, 10.5);
+  assert.equal(q.carrier, "FedEx");
+  assert.equal(q.method, "GROUND_HOME_DELIVERY");
   const call = calls[0]!;
   assert.match(call.url, /CalculateShipping$/);
   const body = call.body as Record<string, unknown>;
-  assert.equal(body["itemId"], "123");
+  assert.equal(body["itemId"], 123);
   assert.equal(body["zipCode"], "20500");
+  assert.equal(body["country"], "US");
 });
 
 test("retries retriable 5xx before giving up", async () => {

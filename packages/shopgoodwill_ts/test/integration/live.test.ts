@@ -135,23 +135,25 @@ test(
 );
 
 test(
-  "shipping.quote: fetch a quote for a live item",
+  "shipping.calculate: fetch a quote for a live item",
   { skip: skipReason },
   async () => {
     const page = await client.search.items({ query: "shirt", pageSize: 5 });
     const seed = page.items[0];
     if (!seed) {
-      assert.fail("no seed item available for shipping.quote test");
+      assert.fail("no seed item available for shipping.calculate test");
     }
-    const quote = await client.shipping.quote({
+    const quote = await client.shipping.calculate({
       itemId: seed.itemId,
       zipCode: "10001",
     });
-    console.log("[shipping.quote]", {
+    console.log("[shipping.calculate]", {
       itemId: seed.itemId,
       shipping: quote.shipping,
       handling: quote.handling,
       total: quote.total,
+      carrier: quote.carrier,
+      method: quote.method,
     });
     assert.ok(Number.isFinite(quote.shipping), "shipping should parse");
     assert.ok(Number.isFinite(quote.handling), "handling should parse");

@@ -20,6 +20,13 @@
   let smtpPass = $state("");
   let globalEmailAlertsEnabled = $state(false);
 
+  let shippingName = $state("");
+  let shippingStreet = $state("");
+  let shippingCity = $state("");
+  let shippingState = $state("");
+  let shippingZip = $state("");
+  let shippingCountry = $state("US");
+
   async function load() {
     loading = true;
     try {
@@ -30,6 +37,12 @@
       smtpPort = cfg.smtpPort ?? "";
       smtpUser = cfg.smtpUser ?? "";
       globalEmailAlertsEnabled = cfg.globalEmailAlertsEnabled;
+      shippingName = cfg.shippingName ?? "";
+      shippingStreet = cfg.shippingStreet ?? "";
+      shippingCity = cfg.shippingCity ?? "";
+      shippingState = cfg.shippingState ?? "";
+      shippingZip = cfg.shippingZip ?? "";
+      shippingCountry = cfg.shippingCountry ?? "US";
     } catch (err) {
       if (!handleUnauthorized(err)) {
         message = { tone: "err", text: (err as Error).message };
@@ -93,6 +106,12 @@
       smtpPort: smtpPort === "" ? null : Number(smtpPort),
       smtpUser: smtpUser || null,
       globalEmailAlertsEnabled,
+      shippingName: shippingName || null,
+      shippingStreet: shippingStreet || null,
+      shippingCity: shippingCity || null,
+      shippingState: shippingState || null,
+      shippingZip: shippingZip || null,
+      shippingCountry: shippingCountry ? shippingCountry.toUpperCase() : null,
     };
     if (smtpPass) payload.smtpPass = smtpPass;
 
@@ -202,6 +221,75 @@
     </section>
 
     <form onsubmit={save} class="space-y-8 max-w-2xl">
+      <section
+        class="rounded-lg border border-slate-800 bg-slate-900/60 p-5 space-y-4"
+      >
+        <div>
+          <h3 class="text-sm font-semibold text-slate-100">Shipping address</h3>
+          <p class="text-xs text-slate-400 mt-0.5">
+            Used to fetch shipping-cost estimates. Only ZIP and country are
+            required, but the rest are shown so you know which address is
+            active.
+          </p>
+        </div>
+        <label class="block text-sm">
+          <span class="text-xs font-medium text-slate-300">Name (optional)</span>
+          <input
+            class="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+            type="text"
+            bind:value={shippingName}
+          />
+        </label>
+        <label class="block text-sm">
+          <span class="text-xs font-medium text-slate-300">Street (optional)</span>
+          <input
+            class="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+            type="text"
+            bind:value={shippingStreet}
+          />
+        </label>
+        <div class="grid gap-4 sm:grid-cols-3">
+          <label class="block text-sm sm:col-span-2">
+            <span class="text-xs font-medium text-slate-300">City (optional)</span>
+            <input
+              class="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+              type="text"
+              bind:value={shippingCity}
+            />
+          </label>
+          <label class="block text-sm">
+            <span class="text-xs font-medium text-slate-300">State (optional)</span>
+            <input
+              class="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+              type="text"
+              placeholder="IL"
+              bind:value={shippingState}
+            />
+          </label>
+        </div>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="block text-sm">
+            <span class="text-xs font-medium text-slate-300">ZIP code</span>
+            <input
+              class="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+              type="text"
+              placeholder="60625"
+              bind:value={shippingZip}
+            />
+          </label>
+          <label class="block text-sm">
+            <span class="text-xs font-medium text-slate-300">Country (ISO-2)</span>
+            <input
+              class="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm uppercase"
+              type="text"
+              maxlength="2"
+              placeholder="US"
+              bind:value={shippingCountry}
+            />
+          </label>
+        </div>
+      </section>
+
       <section
         class="rounded-lg border border-slate-800 bg-slate-900/60 p-5 space-y-4"
       >

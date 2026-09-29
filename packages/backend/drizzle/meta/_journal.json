@@ -15,6 +15,13 @@
       "when": 1790534600000,
       "tag": "0001_token_refresh",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790620000000,
+      "tag": "0002_shipping_address",
+      "breakpoints": true
     }
   ]
 }

@@ -16,6 +16,12 @@ const configUpdateSchema = z.object({
   smtpUser: z.string().nullable().optional(),
   smtpPass: z.string().nullable().optional(),
   globalEmailAlertsEnabled: z.boolean().optional(),
+  shippingName: z.string().nullable().optional(),
+  shippingStreet: z.string().nullable().optional(),
+  shippingCity: z.string().nullable().optional(),
+  shippingState: z.string().nullable().optional(),
+  shippingZip: z.string().nullable().optional(),
+  shippingCountry: z.string().length(2).nullable().optional(),
 });
 
 const goodwillLoginSchema = z.object({
@@ -43,6 +49,12 @@ configRoutes.get("/", async (c) => {
     smtpUser: row.smtpUser,
     smtpPassSet: Boolean(row.smtpPass),
     globalEmailAlertsEnabled: row.globalEmailAlertsEnabled ?? false,
+    shippingName: row.shippingName,
+    shippingStreet: row.shippingStreet,
+    shippingCity: row.shippingCity,
+    shippingState: row.shippingState,
+    shippingZip: row.shippingZip,
+    shippingCountry: row.shippingCountry,
   });
 });
 
@@ -61,6 +73,14 @@ configRoutes.put("/", zValidator("json", configUpdateSchema), async (c) => {
   }
   if (input.globalEmailAlertsEnabled !== undefined) {
     updates.globalEmailAlertsEnabled = input.globalEmailAlertsEnabled;
+  }
+  if (input.shippingName !== undefined) updates.shippingName = input.shippingName;
+  if (input.shippingStreet !== undefined) updates.shippingStreet = input.shippingStreet;
+  if (input.shippingCity !== undefined) updates.shippingCity = input.shippingCity;
+  if (input.shippingState !== undefined) updates.shippingState = input.shippingState;
+  if (input.shippingZip !== undefined) updates.shippingZip = input.shippingZip;
+  if (input.shippingCountry !== undefined) {
+    updates.shippingCountry = input.shippingCountry?.toUpperCase() ?? null;
   }
 
   await db.update(appConfig).set(updates).where(eq(appConfig.id, 1));

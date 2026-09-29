@@ -192,11 +192,30 @@ export interface SearchPage {
 
 // ─── items ──────────────────────────────────────────────────────────────────
 
+export interface ShippingAddress {
+  shippingAddressId: number | undefined;
+  name: string | undefined;
+  street: string | undefined;
+  city: string | undefined;
+  state: string | undefined;
+  country: string | undefined;
+  countryCode: string | undefined;
+  zip: string | undefined;
+  readonly raw: Record<string, unknown>;
+}
+
 export interface ItemDetail extends Listing {
   description: string | undefined;
-  handlingFee: number | undefined;
+  /** Flat handling fee always applied. */
+  handlingPrice: number | undefined;
+  /** Flat shipping. 0 when {@link allowShippingCalculation} is true — call the shipping API for a real quote. */
+  shippingPrice: number | undefined;
+  /** True when shipping must be calculated against a destination address. */
+  allowShippingCalculation: boolean;
   weightLbs: number | undefined;
   minimumBid: number | undefined;
+  /** The current user's ShopGoodwill address book (only populated when authenticated). */
+  buyerShippingAddresses: ShippingAddress[];
 }
 
 export interface BidHistoryEntry {
@@ -212,7 +231,12 @@ export interface ShippingQuote {
   shipping: number;
   handling: number;
   total: number;
-  readonly raw: Record<string, unknown>;
+  /** e.g. "FedEx" — best-effort parse from the HTML response. */
+  carrier: string | undefined;
+  /** e.g. "GROUND_HOME_DELIVERY" — best-effort parse. */
+  method: string | undefined;
+  /** Raw HTML the site returned (kept for debugging / future re-parsing). */
+  readonly rawHtml: string;
 }
 
 // ─── bidding ────────────────────────────────────────────────────────────────

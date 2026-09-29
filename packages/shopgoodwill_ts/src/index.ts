@@ -16,7 +16,8 @@ export { DEFAULT_SEARCH_BODY, buildSearchBody } from "./search.js";
 export type { SearchApi } from "./search.js";
 
 export type { ItemsApi } from "./items.js";
-export type { ShippingApi } from "./shipping.js";
+export { parseShippingHtml } from "./shipping.js";
+export type { ShippingApi, ShippingCalcParams } from "./shipping.js";
 export type { BidsApi } from "./bids.js";
 export type { WatchlistApi } from "./watchlist.js";
 
@@ -46,6 +47,7 @@ export type {
   SearchPage,
   SearchRequestBody,
   SearchSort,
+  ShippingAddress,
   ShippingQuote,
   ThrottleOptions,
   TokenInfo,

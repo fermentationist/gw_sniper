@@ -1,7 +1,12 @@
 import { parseSiteDate } from "./dates.js";
 import type { Transport } from "./http.js";
 import { normalizeListing } from "./search.js";
-import type { BidHistoryEntry, ItemDetail, RequestOptions } from "./types.js";
+import type {
+  BidHistoryEntry,
+  ItemDetail,
+  RequestOptions,
+  ShippingAddress,
+} from "./types.js";
 
 function pickString(obj: Record<string, unknown>, ...keys: string[]): string | undefined {
   for (const k of keys) {
@@ -23,6 +28,23 @@ function pickNumber(obj: Record<string, unknown>, ...keys: string[]): number | u
   return undefined;
 }
 
+function normalizeAddresses(raw: unknown): ShippingAddress[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((a): a is Record<string, unknown> => typeof a === "object" && a !== null)
+    .map((a) => ({
+      shippingAddressId: pickNumber(a, "shippingAddressId", "id"),
+      name: pickString(a, "name"),
+      street: pickString(a, "address", "street"),
+      city: pickString(a, "city"),
+      state: pickString(a, "state", "province"),
+      country: pickString(a, "country"),
+      countryCode: pickString(a, "countryCode"),
+      zip: pickString(a, "zip", "zipCode", "postalCode"),
+      raw: a,
+    }));
+}
+
 export interface ItemsApi {
   get(itemId: number, req?: RequestOptions): Promise<ItemDetail>;
   bidHistory(itemId: number, req?: RequestOptions): Promise<BidHistoryEntry[]>;
@@ -40,9 +62,12 @@ export function createItemsApi(transport: Transport): ItemsApi {
       const detail: ItemDetail = {
         ...base,
         description: pickString(raw, "description", "shortDescription"),
-        handlingFee: pickNumber(raw, "handlingFee", "handling"),
+        handlingPrice: pickNumber(raw, "handlingPrice", "handlingFee", "handling"),
+        shippingPrice: pickNumber(raw, "shippingPrice", "shipping"),
+        allowShippingCalculation: raw["allowShippingCalculation"] === true,
         weightLbs: pickNumber(raw, "weight", "weightLbs"),
         minimumBid: pickNumber(raw, "minimumBid", "nextBid"),
+        buyerShippingAddresses: normalizeAddresses(raw["buyerShippingAddresses"]),
       };
       return detail;
     },

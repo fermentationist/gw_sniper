@@ -20,6 +20,15 @@ export const appConfig = sqliteTable("app_config", {
   globalEmailAlertsEnabled: integer("global_email_alerts_enabled", {
     mode: "boolean",
   }).default(false),
+  // Destination for CalculateShipping quotes. Only country + zip are strictly
+  // required by the site; the rest are stored so the UI can display the
+  // address the user picked.
+  shippingName: text("shipping_name"),
+  shippingStreet: text("shipping_street"),
+  shippingCity: text("shipping_city"),
+  shippingState: text("shipping_state"),
+  shippingZip: text("shipping_zip"),
+  shippingCountry: text("shipping_country"),
 });
 
 export const savedSearches = sqliteTable("saved_searches", {
