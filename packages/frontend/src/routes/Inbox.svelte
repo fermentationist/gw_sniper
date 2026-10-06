@@ -53,6 +53,14 @@
     );
   });
 
+  const allSelected = $derived(
+    displayItems.length > 0 &&
+      displayItems.every((i) => selected.has(i.id)),
+  );
+  const someSelected = $derived(
+    !allSelected && displayItems.some((i) => selected.has(i.id)),
+  );
+
   function fmtEndsIn(iso: string): string {
     const t = new Date(iso).getTime();
     if (!Number.isFinite(t)) return iso;
@@ -163,6 +171,18 @@
     if (next.has(id)) next.delete(id);
     else next.add(id);
     selected = next;
+  }
+
+  function toggleAll() {
+    if (allSelected) {
+      const next = new Set(selected);
+      for (const i of displayItems) next.delete(i.id);
+      selected = next;
+    } else {
+      const next = new Set(selected);
+      for (const i of displayItems) next.add(i.id);
+      selected = next;
+    }
   }
 
   async function bulk(action: "read" | "unread" | "delete" | "restore") {
@@ -338,6 +358,23 @@
     </div>
   {:else}
     <ul class="divide-y divide-slate-800 rounded border border-slate-800 bg-slate-900/40">
+      <li class="flex items-center gap-4 px-3 py-2 bg-slate-900/60 text-xs text-slate-400">
+        <input
+          type="checkbox"
+          checked={allSelected}
+          indeterminate={someSelected}
+          onchange={toggleAll}
+          class="rounded border-slate-700 bg-slate-950"
+          aria-label="Select all"
+        />
+        <button
+          type="button"
+          class="hover:text-slate-100"
+          onclick={toggleAll}
+        >
+          {allSelected ? "Deselect all" : "Select all"} ({displayItems.length})
+        </button>
+      </li>
       {#each displayItems as item (item.id)}
         {@const l = live[item.id]}
         {@const price = l?.currentPrice ?? item.currentPrice}

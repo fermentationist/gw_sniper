@@ -57,3 +57,8 @@ export async function startCronManager(): Promise<void> {
 export function activeJobIds(): string[] {
   return Array.from(jobs.keys());
 }
+
+export function unregisterAllSearches(): void {
+  for (const task of jobs.values()) task.stop();
+  jobs.clear();
+}

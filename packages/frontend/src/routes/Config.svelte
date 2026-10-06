@@ -27,6 +27,12 @@
   let shippingZip = $state("");
   let shippingCountry = $state("US");
 
+  const RESET_DB_PHRASE = "RESET DATABASE";
+  let resetDbOpen = $state(false);
+  let resetDbInput = $state("");
+  let resetDbSubmitting = $state(false);
+  let resetDbError = $state<string | null>(null);
+
   async function load() {
     loading = true;
     try {
@@ -94,6 +100,35 @@
     if (Number.isNaN(d.getTime())) return iso;
     const days = (d.getTime() - Date.now()) / 86400000;
     return `${d.toLocaleString()} (${days >= 0 ? `${days.toFixed(1)}d left` : "expired"})`;
+  }
+
+  function openResetDb() {
+    resetDbInput = "";
+    resetDbError = null;
+    resetDbOpen = true;
+  }
+
+  async function confirmResetDb() {
+    if (resetDbInput !== RESET_DB_PHRASE) return;
+    resetDbSubmitting = true;
+    resetDbError = null;
+    try {
+      await api.post("/api/config/reset-database", {
+        confirmation: resetDbInput,
+      });
+      resetDbOpen = false;
+      resetDbInput = "";
+      message = {
+        tone: "ok",
+        text: "Database reset — all saved searches, inbox items, and bids cleared.",
+      };
+    } catch (err) {
+      if (!handleUnauthorized(err)) {
+        resetDbError = (err as Error).message;
+      }
+    } finally {
+      resetDbSubmitting = false;
+    }
   }
 
   async function save(e: Event) {
@@ -378,5 +413,80 @@
         {saving ? "Saving…" : "Save"}
       </button>
     </form>
+
+    <section
+      class="rounded-lg border border-rose-900 bg-rose-950/30 p-5 space-y-4 max-w-2xl"
+    >
+      <div>
+        <h3 class="text-sm font-semibold text-rose-200">Danger zone</h3>
+        <p class="text-xs text-rose-300/80 mt-0.5">
+          Resetting the database permanently deletes every saved search, inbox
+          item, and bid/sniper job. Your ShopGoodwill login, SMTP settings, and
+          shipping address are preserved.
+        </p>
+      </div>
+      <button
+        type="button"
+        class="rounded bg-rose-900/60 hover:bg-rose-900 px-3 py-1.5 text-xs text-rose-100"
+        onclick={openResetDb}
+      >
+        Reset database
+      </button>
+    </section>
   {/if}
 </div>
+
+{#if resetDbOpen}
+  <div
+    class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"
+  >
+    <div
+      class="w-full max-w-md space-y-4 rounded-lg border border-rose-900 bg-slate-900 p-5"
+    >
+      <h3 class="text-sm font-semibold text-rose-200">Reset database?</h3>
+      <p class="text-xs text-slate-300">
+        This permanently deletes every saved search, inbox item, and bid.
+        Preserved: ShopGoodwill login, SMTP settings, shipping address.
+      </p>
+      <p class="text-xs text-slate-400">
+        Type <code class="rounded bg-slate-950 border border-slate-800 px-1 py-0.5 text-rose-200">{RESET_DB_PHRASE}</code>
+        to confirm.
+      </p>
+      <input
+        class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-mono"
+        type="text"
+        bind:value={resetDbInput}
+        autocomplete="off"
+        autocapitalize="off"
+        autocorrect="off"
+        spellcheck="false"
+        placeholder={RESET_DB_PHRASE}
+      />
+      {#if resetDbError}
+        <div
+          class="rounded bg-rose-950/60 border border-rose-800 px-3 py-2 text-xs text-rose-200"
+        >
+          {resetDbError}
+        </div>
+      {/if}
+      <div class="flex justify-end gap-2">
+        <button
+          type="button"
+          class="rounded px-3 py-1.5 text-sm text-slate-300 hover:text-slate-100"
+          onclick={() => (resetDbOpen = false)}
+          disabled={resetDbSubmitting}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="rounded bg-rose-600 px-3 py-1.5 text-sm font-medium text-slate-50 hover:bg-rose-500 disabled:opacity-40 disabled:cursor-not-allowed"
+          disabled={resetDbSubmitting || resetDbInput !== RESET_DB_PHRASE}
+          onclick={confirmResetDb}
+        >
+          {resetDbSubmitting ? "Resetting…" : "Reset database"}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}

@@ -189,6 +189,11 @@ export function cancelSniperTimer(jobId: string): void {
   cancelTimer(jobId);
 }
 
+export function cancelAllSniperTimers(): void {
+  for (const { handle } of timers.values()) clearTimeout(handle);
+  timers.clear();
+}
+
 /** Sweep: pick up scheduled jobs near expiry and arm their timers. */
 async function microSweepPass(): Promise<void> {
   const rows = await db

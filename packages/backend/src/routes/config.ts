@@ -3,11 +3,20 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "../db/index.js";
-import { appConfig } from "../db/schema.js";
+import {
+  appConfig,
+  itemInbox,
+  savedSearches,
+  sniperJobs,
+} from "../db/schema.js";
 import { requireAuth } from "../lib/auth.js";
+import { unregisterAllSearches } from "../lib/cronManager.js";
 import { encryptSecret } from "../lib/crypto.js";
 import { loginAndStoreTokens } from "../lib/goodwill.js";
 import { invalidateMailer } from "../lib/mailer.js";
+import { cancelAllSniperTimers } from "../lib/sniperEngine.js";
+
+export const RESET_DB_CONFIRM_PHRASE = "RESET DATABASE";
 
 const configUpdateSchema = z.object({
   notificationEmail: z.string().email().nullable().optional(),
@@ -106,6 +115,29 @@ configRoutes.post(
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ error: message }, 400);
     }
+  },
+);
+
+const resetDatabaseSchema = z.object({
+  confirmation: z.string(),
+});
+
+// Nukes all saved entities (inbox, searches, sniper jobs). Preserves the
+// app_config row so auth tokens, SMTP settings, and shipping address survive.
+configRoutes.post(
+  "/reset-database",
+  zValidator("json", resetDatabaseSchema),
+  async (c) => {
+    const { confirmation } = c.req.valid("json");
+    if (confirmation !== RESET_DB_CONFIRM_PHRASE) {
+      return c.json({ error: "confirmation_mismatch" }, 400);
+    }
+    unregisterAllSearches();
+    cancelAllSniperTimers();
+    await db.delete(sniperJobs);
+    await db.delete(itemInbox);
+    await db.delete(savedSearches);
+    return c.json({ ok: true });
   },
 );
 
